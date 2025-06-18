@@ -3,3 +3,4 @@ pandas
 pycaret
 openpyxl
 xlsxwriter
+python-dotenv
