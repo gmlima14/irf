@@ -1,6 +1,6 @@
 streamlit
 pandas
-pycaret>=3.0.0 # Use a versão exata do PyCaret que você usou para treinar o modelo
+pycaret>=3.3.2
 openpyxl
 xlsxwriter
 python-dotenv
