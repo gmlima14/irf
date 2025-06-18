@@ -3,9 +3,8 @@ import pandas as pd
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from io import BytesIO
-# import joblib  # REMOVA ISSO
-import requests
 import os
+import gdown  # Certifique-se de que gdown está instalado
 
 # Importe load_model e predict_model do PyCaret, como no seu código original
 from pycaret.classification import load_model, predict_model 
@@ -25,68 +24,53 @@ CARGA_URL = f"https://drive.google.com/uc?export=download&id={CARGA_DRIVE_ID}"
 
 # Função para carregar o modelo PyCaret do Drive
 @st.cache_resource # Usar cache_resource para o modelo PyCaret
-def load_pycaret_model_from_drive(url):
-    st.write(f"Baixando modelo PyCaret de: {url}")
+def load_pycaret_model_from_drive(file_id): # Agora recebe o ID diretamente
+    output_path = "temp_pycaret_model" # Sem .pkl, conforme corrigido
+    st.write(f"Baixando modelo PyCaret (ID: {file_id}) com gdown...")
     try:
-        response = requests.get(url)
-        response.raise_for_status()
+        gdown.download(id=file_id, output=output_path, quiet=False) # quiet=False para ver progresso
 
-        st.write(f"Tamanho do conteúdo baixado (bytes): {len(response.content)}")
-
-        # A função load_model do PyCaret pode carregar diretamente de um BytesIO
-        # ou de um caminho de arquivo. Precisamos salvar temporariamente
-        # ou passar o BytesIO de forma que ela aceite.
-        # A forma mais robusta é salvar o conteúdo em um arquivo temporário.
-        temp_model_path = "temp_pycaret_model"
-        with open(temp_model_path, "wb") as f:
-            f.write(response.content)
-
-        if os.path.exists(temp_model_path):
-            st.write(f"Arquivo temporário salvo em: {temp_model_path}")
-            st.write(f"Tamanho do arquivo temporário (bytes): {os.path.getsize(temp_model_path)}")
+        # DEBUG: Verifique se o arquivo foi salvo e seu tamanho
+        if os.path.exists(output_path):
+            st.write(f"Arquivo temporário salvo em: {output_path}")
+            st.write(f"Tamanho do arquivo temporário (bytes): {os.path.getsize(output_path)}")
         else:
-            st.error("Erro: O arquivo temporário não foi criado.")
-        return None # Sai da função se o arquivo não foi salvo
-        
-        # Carrega o modelo PyCaret usando a função load_model do PyCaret
-        model = load_model(temp_model_path, verbose=False) # verbose=False para reduzir logs
-        
-        # Opcional: remover o arquivo temporário
-        os.remove(temp_model_path)
-        
+            st.error("Erro: O arquivo temporário não foi criado por gdown.")
+            return None
+
+        model = load_model(output_path, verbose=False)
+
+        os.remove(output_path)
+
         return model
-    except requests.exceptions.RequestException as e:
-        st.error(f"Erro ao baixar o modelo PyCaret do Drive: {e}. Verifique o ID e as permissões.")
-        return None
     except Exception as e:
-        st.error(f"Erro ao carregar o modelo PyCaret: {e}. Certifique-se que o modelo foi salvo corretamente com PyCaret e a versão do PyCaret é compatível.")
+        st.error(f"Erro ao baixar ou carregar o modelo PyCaret com gdown: {e}. Verifique o ID e a versão PyCaret.")
         return None
 
 # Função para carregar DataFrames (sem alterações significativas)
 @st.cache_data
-def load_data_from_drive(url, file_type):
-    st.write(f"Baixando planilha de: {url}")
+def load_dataframe_from_drive(file_id, file_type):
+    output_path = f"/tmp/data_{file_id}.{'xlsx' if file_type == 'excel' else 'csv'}"
+    st.write(f"Baixando planilha (ID: {file_id}) com gdown...")
     try:
-        response = requests.get(url)
-        response.raise_for_status()
+        gdown.download(id=file_id, output=output_path, quiet=False)
+
+        # DEBUG: Verifique o tamanho do arquivo baixado
+        if os.path.exists(output_path):
+            st.write(f"Arquivo temporário salvo em: {output_path}")
+            st.write(f"Tamanho do arquivo temporário (bytes): {os.path.getsize(output_path)}")
 
         if file_type == 'excel':
-            return pd.read_excel(BytesIO(response.content), engine='openpyxl')
+            return pd.read_excel(output_path, engine='openpyxl') # Mantenha o engine='openpyxl'
         elif file_type == 'csv':
-            return pd.read_csv(BytesIO(response.content), engine='openpyxl')
-        else:
-            st.error("Tipo de arquivo de dados não suportado para download.")
-            return None
-    except requests.exceptions.RequestException as e:
-        st.error(f"Erro ao baixar a planilha do Drive: {e}. Verifique o ID e as permissões de compartilhamento.")
-        return None
+            return pd.read_csv(output_path)
     except Exception as e:
-        st.error(f"Erro ao processar a planilha baixada: {e}")
+        st.error(f"Erro ao baixar ou carregar a planilha com gdown: {e}")
         return None
 
 # Carrega os arquivos automaticamente
-modelo = load_pycaret_model_from_drive(MODELO_URL) # Use a nova função
-df_carga = load_data_from_drive(CARGA_URL, 'excel')
+modelo = load_pycaret_model_from_drive(MODELO_DRIVE_ID) # Use a nova função
+df_carga = load_data_from_drive(CARGA_DRIVE_ID, 'csv')
 
 uploaded_pedidos = st.file_uploader("📤 Envie a planilha de pedidos em aberto", type=["xlsx", "csv"])
 
