@@ -31,6 +31,8 @@ def load_pycaret_model_from_drive(url):
         response = requests.get(url)
         response.raise_for_status()
 
+        st.write(f"Tamanho do conteúdo baixado (bytes): {len(response.content)}")
+
         # A função load_model do PyCaret pode carregar diretamente de um BytesIO
         # ou de um caminho de arquivo. Precisamos salvar temporariamente
         # ou passar o BytesIO de forma que ela aceite.
@@ -38,6 +40,13 @@ def load_pycaret_model_from_drive(url):
         temp_model_path = "temp_pycaret_model"
         with open(temp_model_path, "wb") as f:
             f.write(response.content)
+
+        if os.path.exists(temp_model_path):
+            st.write(f"Arquivo temporário salvo em: {temp_model_path}")
+            st.write(f"Tamanho do arquivo temporário (bytes): {os.path.getsize(temp_model_path)}")
+        else:
+            st.error("Erro: O arquivo temporário não foi criado.")
+        return None # Sai da função se o arquivo não foi salvo
         
         # Carrega o modelo PyCaret usando a função load_model do PyCaret
         model = load_model(temp_model_path, verbose=False) # verbose=False para reduzir logs
