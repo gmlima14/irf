@@ -62,9 +62,9 @@ def load_data_from_drive(url, file_type):
         response.raise_for_status()
 
         if file_type == 'excel':
-            return pd.read_excel(BytesIO(response.content))
+            return pd.read_excel(BytesIO(response.content), engine='openpyxl')
         elif file_type == 'csv':
-            return pd.read_csv(BytesIO(response.content))
+            return pd.read_csv(BytesIO(response.content), engine='openpyxl')
         else:
             st.error("Tipo de arquivo de dados não suportado para download.")
             return None
