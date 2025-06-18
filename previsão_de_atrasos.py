@@ -35,7 +35,7 @@ def load_pycaret_model_from_drive(url):
         # ou de um caminho de arquivo. Precisamos salvar temporariamente
         # ou passar o BytesIO de forma que ela aceite.
         # A forma mais robusta é salvar o conteúdo em um arquivo temporário.
-        temp_model_path = "temp_pycaret_model.pkl"
+        temp_model_path = "temp_pycaret_model"
         with open(temp_model_path, "wb") as f:
             f.write(response.content)
         
