@@ -1,6 +1,5 @@
 streamlit
 pandas
 pycaret
-scikit-learn
 openpyxl
 xlsxwriter
