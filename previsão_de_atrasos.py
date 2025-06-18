@@ -3,9 +3,13 @@ import pandas as pd
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from io import BytesIO
-import joblib  # Ou pickle, dependendo de como você salvou seu modelo sklearn
-import requests # Para fazer requisições HTTP
+# import joblib  # REMOVA ISSO
+import requests
 import os
+
+# Importe load_model e predict_model do PyCaret, como no seu código original
+from pycaret.classification import load_model, predict_model 
+
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -13,61 +17,84 @@ load_dotenv()
 st.set_page_config(page_title="IRF - Análise de Fornecedores", layout="wide")
 st.title("🔍 IRF - Índice de Risco de Fornecedores")
 
-# --- URLs dos arquivos no Google Drive ---
-# Exemplo: Substitua com os IDs reais dos seus arquivos
-
 MODELO_DRIVE_ID = st.secrets["MODELO_DRIVE_ID"] # USE ESTA LINHA
 CARGA_DRIVE_ID = st.secrets["CARGA_DRIVE_ID"]   # USE ESTA LINHA
 
 MODELO_URL = f"https://drive.google.com/uc?export=download&id={MODELO_DRIVE_ID}"
 CARGA_URL = f"https://drive.google.com/uc?export=download&id={CARGA_DRIVE_ID}"
 
-@st.cache_data # Use st.cache_resource para o modelo se ele for um objeto grande e não um DataFrame
-def load_data_from_drive(url, file_type):
-    st.write(f"Baixando arquivo de: {url}") # Para depuração
+# Função para carregar o modelo PyCaret do Drive
+@st.cache_resource # Usar cache_resource para o modelo PyCaret
+def load_pycaret_model_from_drive(url):
+    st.write(f"Baixando modelo PyCaret de: {url}")
     try:
         response = requests.get(url)
-        response.raise_for_status() # Levanta um erro para códigos de status HTTP ruins (4xx ou 5xx)
+        response.raise_for_status()
+
+        # A função load_model do PyCaret pode carregar diretamente de um BytesIO
+        # ou de um caminho de arquivo. Precisamos salvar temporariamente
+        # ou passar o BytesIO de forma que ela aceite.
+        # A forma mais robusta é salvar o conteúdo em um arquivo temporário.
+        temp_model_path = "temp_pycaret_model.pkl"
+        with open(temp_model_path, "wb") as f:
+            f.write(response.content)
+        
+        # Carrega o modelo PyCaret usando a função load_model do PyCaret
+        model = load_model(temp_model_path, verbose=False) # verbose=False para reduzir logs
+        
+        # Opcional: remover o arquivo temporário
+        os.remove(temp_model_path)
+        
+        return model
+    except requests.exceptions.RequestException as e:
+        st.error(f"Erro ao baixar o modelo PyCaret do Drive: {e}. Verifique o ID e as permissões.")
+        return None
+    except Exception as e:
+        st.error(f"Erro ao carregar o modelo PyCaret: {e}. Certifique-se que o modelo foi salvo corretamente com PyCaret e a versão do PyCaret é compatível.")
+        return None
+
+# Função para carregar DataFrames (sem alterações significativas)
+@st.cache_data
+def load_data_from_drive(url, file_type):
+    st.write(f"Baixando planilha de: {url}")
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
 
         if file_type == 'excel':
             return pd.read_excel(BytesIO(response.content))
         elif file_type == 'csv':
             return pd.read_csv(BytesIO(response.content))
-        elif file_type == 'pkl':
-            return joblib.load(BytesIO(response.content))
         else:
-            st.error("Tipo de arquivo não suportado para download.")
+            st.error("Tipo de arquivo de dados não suportado para download.")
             return None
     except requests.exceptions.RequestException as e:
-        st.error(f"Erro ao baixar o arquivo do Drive: {e}. Verifique o ID e as permissões de compartilhamento.")
+        st.error(f"Erro ao baixar a planilha do Drive: {e}. Verifique o ID e as permissões de compartilhamento.")
         return None
     except Exception as e:
-        st.error(f"Erro ao processar o arquivo baixado: {e}")
+        st.error(f"Erro ao processar a planilha baixada: {e}")
         return None
 
 # Carrega os arquivos automaticamente
-modelo = load_data_from_drive(MODELO_URL, 'pkl')
-df_carga = load_data_from_drive(CARGA_URL, 'excel') # Assumindo que sua carga é Excel
+modelo = load_pycaret_model_from_drive(MODELO_URL) # Use a nova função
+df_carga = load_data_from_drive(CARGA_URL, 'excel')
 
-# Remova os uploaders, já que os arquivos serão baixados automaticamente
-# uploaded_pedidos = st.file_uploader("📤 Envie a planilha de pedidos em aberto", type=["xlsx", "csv"])
-# uploaded_modelo = st.file_uploader("📤 Envie o modelo treinado (pkl)", type=["pkl"])
-# uploaded_carga = st.file_uploader("📤 Envie a planilha de carga média de fornecedores", type=["xlsx", "csv"])
-
-# O uploader para pedidos em aberto ainda pode ser útil
 uploaded_pedidos = st.file_uploader("📤 Envie a planilha de pedidos em aberto", type=["xlsx", "csv"])
 
 if uploaded_pedidos and modelo is not None and df_carga is not None:
-    # Leitura dos arquivos
     df_pedidos_em_aberto = pd.read_csv(uploaded_pedidos) if uploaded_pedidos.name.endswith('.csv') else pd.read_excel(uploaded_pedidos)
 
     st.success("✅ Arquivos carregados e baixados com sucesso!")
 
-    # ... (o restante do seu código permanece o mesmo) ...
+    # AQUI ESTÁ A MAIOR MUDANÇA: USANDO predict_model DO PYCARET
+    # Você não precisa mais do bloco 'features_do_modelo'
+    # O PyCaret gerenciará o pré-processamento automaticamente
+    # apenas certifique-se de que 'df_pedidos_em_aberto' tem as colunas originais
+    # nas quais o modelo PyCaret foi treinado.
 
-    # Conversão de tipos
-    df_pedidos_em_aberto['MATKL'] = df_pedidos_em_aberto['MATKL'].astype('category')
-    df_pedidos_em_aberto['Vendor'] = df_pedidos_em_aberto['Vendor'].astype('category')
+    # df_pedidos_em_aberto['MATKL'] = df_pedidos_em_aberto['MATKL'].astype('category') # PyCaret fará isso se foi no setup
+    # df_pedidos_em_aberto['Vendor'] = df_pedidos_em_aberto['Vendor'].astype('category') # PyCaret fará isso se foi no setup
+    # Remova conversões de tipo se o PyCaret as gerencia no pipeline
     df_pedidos_em_aberto["BEDAT"] = pd.to_datetime(df_pedidos_em_aberto["BEDAT"], errors="coerce")
     df_pedidos_em_aberto["Due Date (incl. ex works time)"] = pd.to_datetime(df_pedidos_em_aberto["Due Date (incl. ex works time)"], errors="coerce")
 
@@ -76,44 +103,18 @@ if uploaded_pedidos and modelo is not None and df_carga is not None:
     df_pedidos_em_aberto["IdadePedido"] = (hoje - df_pedidos_em_aberto["BEDAT"]).dt.days
     df_pedidos_em_aberto["DiasParaEntrega"] = (df_pedidos_em_aberto["Due Date (incl. ex works time)"] - df_pedidos_em_aberto["BEDAT"]).dt.days
 
-    # Carga
     pedidos_abertos_por_fornecedor = df_pedidos_em_aberto['Vendor'].value_counts()
     df_pedidos_em_aberto['carga_fornecedor'] = df_pedidos_em_aberto['Vendor'].map(pedidos_abertos_por_fornecedor).fillna(0).astype(int)
 
-    # Preparar os dados para o modelo sklearn
-    features_do_modelo = [
-        "MesPedido",
-        "IdadePedido",
-        "DiasParaEntrega",
-        "carga_fornecedor",
-        "NetOrderValue"
-        # Adicione outras features numéricas ou codificadas que seu modelo usa
-    ]
+    # Previsões com predict_model do PyCaret
+    # O predict_model lida com o pré-processamento.
+    # Certifique-se de que o df_pedidos_em_aberto tem o mesmo formato
+    # (colunas e tipos) que os dados usados no setup() original do PyCaret.
+    previsoes = predict_model(modelo, data=df_pedidos_em_aberto)
 
-    # Certifique-se de que todas as colunas necessárias existam no DataFrame antes de selecioná-las
-    # E que o pré-processamento (e.g., OneHotEncoder para categorias) seja aplicado aqui,
-    # se não estiver embutido no seu pipeline do modelo.
-    # Exemplo: tratamento de colunas categóricas (ajuste conforme seu modelo)
-    # df_pedidos_em_aberto = pd.get_dummies(df_pedidos_em_aberto, columns=['MATKL', 'Vendor'], drop_first=True) # Exemplo
-
-    # Remova colunas que não são features para o modelo ANTES de passar para o predict
-    # Certifique-se que X_predict tenha as mesmas colunas e ordem que no treinamento
-    # Você pode precisar de um pipeline ou transformador para garantir a ordem e as colunas.
-    try:
-        X_predict = df_pedidos_em_aberto[features_do_modelo]
-    except KeyError as e:
-        st.error(f"Coluna faltando no DataFrame para a previsão do modelo: {e}. Verifique as 'features_do_modelo'.")
-        st.stop() # Para o script se colunas essenciais estiverem faltando
-
-    # Previsões
-    previsoes_labels = modelo.predict(X_predict)
-    previsoes_proba = modelo.predict_proba(X_predict)
-
-    df_pedidos_em_aberto['Previsão'] = previsoes_labels
-    df_pedidos_em_aberto['Confiabilidade'] = [prob[label] for prob, label in zip(previsoes_proba, previsoes_labels)]
-
-    previsoes = df_pedidos_em_aberto
     previsoes.rename(columns={
+        "prediction_label": "Previsão", # Nomes de coluna padrão do PyCaret
+        "prediction_score": "Confiabilidade", # Nomes de coluna padrão do PyCaret
         "carga_fornecedor": "Carga do Fornecedor",
         "EBELN": "PO",
         "EBELP": "Item",
@@ -129,7 +130,7 @@ if uploaded_pedidos and modelo is not None and df_carga is not None:
     }, inplace=True)
     previsoes["Previsão"] = previsoes["Previsão"].replace({0: "No Prazo", 1: "Atraso"})
 
-    # Agrupamento (restante do seu código)
+    # Agrupamento
     agrupado = previsoes.groupby('Vendor').agg(
         pedidos_no_prazo=('Previsão', lambda x: (x == 'No Prazo').sum()),
         pedidos_atrasados=('Previsão', lambda x: (x == 'Atraso').sum()),
@@ -200,7 +201,6 @@ if uploaded_pedidos and modelo is not None and df_carga is not None:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 else:
-    # Ajuste a mensagem para refletir que os arquivos são baixados automaticamente
     if modelo is None or df_carga is None:
         st.info("⏳ Tentando baixar o modelo e a planilha de carga do Google Drive...")
     if uploaded_pedidos is None:
