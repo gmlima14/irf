@@ -164,7 +164,7 @@ if uploaded_pedidos and modelo is not None and df_carga is not None:
 
     df_fornecedores = agrupado[[
         'fornecedor', 'Vendor', 'pedidos_no_prazo', 'pedidos_atrasados', 'taxa_no_prazo',
-        'total_pedidos', 'carga_media', 'taxa_carga',  'valor_total', 'taxa_valor', 'confiabilidade_media',  'indice_risco'
+        'total_pedidos', 'carga_media', 'taxa_carga', 'valor_total', 'taxa_valor', 'confiabilidade_media', 'indice_risco'
     ]]
 
     df_fornecedores = df_fornecedores.sort_values('indice_risco', ascending=False).reset_index(drop=True)
