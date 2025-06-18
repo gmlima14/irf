@@ -5,3 +5,4 @@ pycaret>=3.3.2
 openpyxl
 xlsxwriter
 python-dotenv
+requests
