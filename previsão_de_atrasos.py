@@ -5,6 +5,8 @@ from zoneinfo import ZoneInfo  # disponível a partir do Python 3.9
 from io import BytesIO
 from pycaret.classification import load_model, predict_model
 from dotenv import load_dotenv
+import os
+
 load_dotenv()
 
 st.set_page_config(page_title="IRF - Análise de Fornecedores", layout="wide")
